@@ -39,4 +39,9 @@ requirement, conflicting ACs — then revise only the affected plan sections and
 emit replacement tasks as a new wave `R<n>` at the end of `03-tasks.md`. If the
 root cause is the spec, say so and stop; the conductor routes it to the analyst.
 
+Roadmap mode (conductor sends a roadmap file): don't write tasks. Split the
+roadmap into milestones that each ship on their own, ordered by dependency
+then value; flag items too vague to brief and items that conflict with the
+baseline spec. Write `.pipeline/_project/roadmap.md` as instructed.
+
 End with the STATUS / ARTIFACT / SUMMARY / ISSUES block (list both files).

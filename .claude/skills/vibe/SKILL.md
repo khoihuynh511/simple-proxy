@@ -1,7 +1,7 @@
 ---
 name: vibe
 description: Multi-agent build pipeline (brief → specify → plan → tasks → execute → test → review → feedback → fix, looped over rounds). Use when the user hands over a brief for a tool, toolkit, feature or small project and wants it built end to end, or asks to resume/inspect a pipeline run.
-argument-hint: "<brief> [--auto] [--rounds N] | resume <slug> | status"
+argument-hint: "<brief> [--auto] [--rounds N] | adopt | roadmap <file> | fix <file|text> | resume <slug> | status"
 model: opus
 effort: high
 ---
@@ -18,6 +18,46 @@ Arguments: `$ARGUMENTS`
 - `<brief>` → new run. `--auto` skips Gate A. `--rounds N` overrides max rounds (default **3**).
 - `resume <slug>` → read `.pipeline/<slug>/state.json`, continue from `phase`.
 - `status` → list `.pipeline/*/state.json` with phase, round, open items. Stop.
+- `adopt` / `roadmap <file>` / `fix <file|text>` → brownfield modes, see below.
+
+## Brownfield modes (existing project)
+
+Use these when the codebase already exists and has history. They reuse the
+same specialists and phases; they only change where the pipeline starts.
+
+### `adopt` — onboard an existing project (run once)
+1. `scout` → `.pipeline/_project/context.md` (as `00-context.md`, plus: open
+   TODO/FIXME count, recent churn hotspots from `git log --stat -50`, existing
+   docs/roadmap/changelog files found).
+2. `analyst` → `.pipeline/_project/baseline-spec.md`: reverse-engineer what the
+   project does **today** as ACs (`BL-xx`), marking each `verified` (a test
+   covers it) or `assumed`. Source: code, README, docs — never invention.
+3. `tester` → `.pipeline/_project/baseline-report.md`: run the existing suite,
+   lint, typecheck; list which `BL-xx` have no test.
+4. Show the user: what the project does, the health numbers, untested core
+   behaviour. Ask whether to add characterization tests for the untested core
+   first (recommended before any roadmap work — it's the safety net that makes
+   later rounds trustworthy). Yes → normal run with slug `safety-net`, whose
+   spec is "a test per untested `BL-xx`", builder skipped, tester only.
+
+Every later run in this repo reads `_project/context.md` instead of
+re-scouting, and its reviewer also checks the `BL-xx` list for regressions.
+
+### `roadmap <file>` — plan a release from a roadmap
+1. Requires `adopt` done; run it first if `_project/` is missing.
+2. `architect` (planning mode) → `.pipeline/_project/roadmap.md`: split the
+   roadmap into milestones `M1..Mn`, each shippable alone, ordered by
+   dependency then value. Each milestone: goal, items, dependencies, risk,
+   rough size, and a one-paragraph brief.
+3. Gate: user approves order and cuts. Then run milestone briefs **one at a
+   time** as normal runs (slug `m<n>-<name>`). Close each (P8) before starting
+   the next; update `roadmap.md` status lines as they complete.
+
+### `fix <file|text>` — batch of known bugs / revision requests
+Skips P1–P3. You write `rounds/r1/feedback.md` directly: one `FB-1-n` per bug
+with its repro if known (ask `scout` to locate the code). Then P7 → P4∥P5 →
+P6 loop as usual. If an item is really a feature or changes behaviour beyond
+the bug, pull it out and tell the user it belongs in a roadmap run.
 
 ## Specialists
 

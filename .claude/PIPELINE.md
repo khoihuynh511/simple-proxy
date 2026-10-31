@@ -20,6 +20,16 @@ Hoặc trong session bất kỳ:
 
 `--auto` bỏ qua Gate A (duyệt spec). Mặc định **3 round** fix.
 
+## Dự án đang có sẵn (brownfield)
+
+```
+/vibe adopt                  # 1 lần: trinh sát, dựng baseline, đo test coverage
+/vibe fix bugs.md            # xử lý lô bug / yêu cầu sửa tồn đọng
+/vibe roadmap ROADMAP.md     # cắt roadmap thành milestone, chạy lần lượt
+```
+
+Thứ tự khuyến nghị: **adopt → safety-net tests → fix → roadmap**.
+
 ## Đội hình
 
 - **conductor** — Opus · high — điều phối, giữ gate, không tự code
