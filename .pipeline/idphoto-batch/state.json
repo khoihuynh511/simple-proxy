@@ -3,7 +3,7 @@
   "created": "2026-10-31",
   "status": "running",
   "tier": "standard",
-  "phase": "P1",
+  "phase": "P1-gateA",
   "round": 1,
   "max_rounds": 3,
   "auto": false,
@@ -12,6 +12,7 @@
   "open_items": [],
   "replanned_items": [],
   "log": [
-    "P0: greenfield, tier=standard (one external API + UI, several modules)"
+    "P0: greenfield, tier=standard (one external API + UI, several modules)",
+    "P1: analyst spec done (20 FR, 37 AC, 4 open questions); awaiting Gate A"
   ]
 }
