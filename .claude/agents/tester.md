@@ -21,7 +21,7 @@ promises, not what the builder says they did.
   (e.g. `AC-03: rejects expired token`). Include the obvious edge cases each AC
   implies (empty input, boundary values, error paths).
 - Round ≥2: re-run everything, keep prior tests, add a regression test for each
-  failure fixed since last round if the fixer didn't.
+  failure fixed since last round if the builder didn't.
 - Run: full test suite, lint, typecheck. Capture exit codes and trimmed output.
 - UI project: run the app, drive the main flows with Playwright
   (`require('playwright')`), save screenshots at 1280px and 390px width to

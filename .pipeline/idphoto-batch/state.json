@@ -3,7 +3,7 @@
   "created": "2026-10-31",
   "status": "running",
   "tier": "standard",
-  "phase": "P1-gateA",
+  "phase": "P2-waiting",
   "round": 1,
   "max_rounds": 3,
   "auto": false,
@@ -13,6 +13,8 @@
   "replanned_items": [],
   "log": [
     "P0: greenfield, tier=standard (one external API + UI, several modules)",
-    "P1: analyst spec done (20 FR, 37 AC, 4 open questions); awaiting Gate A"
+    "P1: analyst spec done (20 FR, 37 AC, 4 open questions); awaiting Gate A",
+    "Gate A passed; spec rewritten lean (15 AC) by conductor under pipeline v2",
+    "Blocked: new repo creation denied for integration (403); awaiting owner-created repo + Ultimate prompt set"
   ]
 }

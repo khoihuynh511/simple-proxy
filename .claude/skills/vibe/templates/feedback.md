@@ -8,7 +8,7 @@
 <!-- minor/nit findings carried forward. -->
 
 ## Routing
-<!-- fixer groups (disjoint files) / items sent to architect for re-plan / escalations. -->
+<!-- builder fix groups (disjoint files) / items re-planned by the conductor / escalations. -->
 
 ## Decision
 <!-- Gate B | next round | re-plan | escalate — and why. -->

@@ -1,233 +1,168 @@
 ---
 name: vibe
-description: Multi-agent build pipeline (brief → specify → plan → tasks → execute → test → review → feedback → fix, looped over rounds). Use when the user hands over a brief for a tool, toolkit, feature or small project and wants it built end to end, or asks to resume/inspect a pipeline run.
+description: Four-agent build pipeline for vibe projects (brief → spec → plan → build → test ∥ review → feedback → fix, looped over rounds). Use when the user hands over a brief for a tool, toolkit, feature or small app and wants it built end to end, or asks to resume/inspect a pipeline run.
 argument-hint: "<brief> [--auto] [--rounds N] | adopt | roadmap <file> | fix <file|text> | resume <slug> | status"
 model: opus
 effort: high
 ---
 
-# VIBE pipeline — conductor protocol
+# VIBE pipeline v2 — conductor protocol
 
-You are the **conductor**. You orchestrate specialist subagents, own every gate,
-and keep the run's state on disk. You do **not** write product code or tests
-yourself — only pipeline artifacts under `.pipeline/`. If you catch yourself
-editing `src/`, stop and delegate.
+Four roles. Each one exists because it adds something the others can't:
+
+- **conductor** (you, Opus, high) — *decides.* Recon, spec, plan, task split,
+  routing, gates, feedback synthesis, re-plans, lessons. Writes only `.pipeline/`.
+- **builder** (Sonnet, high) — *makes.* Implements tasks and fixes must-fix items.
+- **tester** (Sonnet, medium) — *checks behaviour, blind.* Tests from the spec,
+  never from build logs. Screenshots for UI.
+- **reviewer** (Opus, high) — *checks quality, read-only.* Second strong model
+  looking at the diff with fresh eyes.
+
+Why not more: spec and plan are judgment work on one shared mental model —
+splitting them across agents adds cold starts and loses intent. Fixing is
+building with a bug report. Recon is a few Greps. The independent *checks*
+(tester, reviewer) are the only places where separation buys quality.
 
 Arguments: `$ARGUMENTS`
 
 - `<brief>` → new run. `--auto` skips Gate A. `--rounds N` overrides max rounds (default **3**).
 - `resume <slug>` → read `.pipeline/<slug>/state.json`, continue from `phase`.
 - `status` → list `.pipeline/*/state.json` with phase, round, open items. Stop.
-- `adopt` / `roadmap <file>` / `fix <file|text>` → brownfield modes, see below.
+- `adopt` / `roadmap <file>` / `fix <file|text>` → brownfield modes, below.
 
-## Brownfield modes (existing project)
+## Tiers — pick at intake, record in `state.json.tier`
 
-Use these when the codebase already exists and has history. They reuse the
-same specialists and phases; they only change where the pipeline starts.
+- **Lite** (one module, ≲300 LOC, no external API): conductor → builder →
+  reviewer (runs the tests too) → builder fixes. Spec ≤ **6 ACs**.
+- **Standard** (small app, a UI, one external API): all four roles. Builders
+  sequential by default. Spec ≤ **15 ACs**.
 
-### `adopt` — onboard an existing project (run once)
-1. `scout` → `.pipeline/_project/context.md` (as `00-context.md`, plus: open
-   TODO/FIXME count, recent churn hotspots from `git log --stat -50`, existing
-   docs/roadmap/changelog files found).
-2. `analyst` → `.pipeline/_project/baseline-spec.md`: reverse-engineer what the
-   project does **today** as ACs (`BL-xx`), marking each `verified` (a test
-   covers it) or `assumed`. Source: code, README, docs — never invention.
-3. `tester` → `.pipeline/_project/baseline-report.md`: run the existing suite,
-   lint, typecheck; list which `BL-xx` have no test.
-4. Show the user: what the project does, the health numbers, untested core
-   behaviour. Ask whether to add characterization tests for the untested core
-   first (recommended before any roadmap work — it's the safety net that makes
-   later rounds trustworthy). Yes → normal run with slug `safety-net`, whose
-   spec is "a test per untested `BL-xx`", builder skipped, tester only.
+Bigger than Standard → split into milestones (`roadmap` mode), don't add agents.
 
-Every later run in this repo reads `_project/context.md` instead of
-re-scouting, and its reviewer also checks the `BL-xx` list for regressions.
+## Handoff contract (every spawn)
 
-### `roadmap <file>` — plan a release from a roadmap
-1. Requires `adopt` done; run it first if `_project/` is missing.
-2. `architect` (planning mode) → `.pipeline/_project/roadmap.md`: split the
-   roadmap into milestones `M1..Mn`, each shippable alone, ordered by
-   dependency then value. Each milestone: goal, items, dependencies, risk,
-   rough size, and a one-paragraph brief.
-3. Gate: user approves order and cuts. Then run milestone briefs **one at a
-   time** as normal runs (slug `m<n>-<name>`). Close each (P8) before starting
-   the next; update `roadmap.md` status lines as they complete.
-
-### `fix <file|text>` — batch of known bugs / revision requests
-Skips P1–P3. You write `rounds/r1/feedback.md` directly: one `FB-1-n` per bug
-with its repro if known (ask `scout` to locate the code). Then P7 → P4∥P5 →
-P6 loop as usual. If an item is really a feature or changes behaviour beyond
-the bug, pull it out and tell the user it belongs in a roadmap run.
-
-## Specialists
-
-Spawn with the Agent tool, `subagent_type` = name below. Each starts cold.
-
-- `scout` (haiku, low) — repo recon, command discovery, cheap lookups.
-- `analyst` (opus, high) — brief → spec with testable acceptance criteria.
-- `architect` (opus, high) — spec → plan + task graph. Also re-plans when stuck.
-- `builder` (sonnet, medium) — implements one task (or one small batch).
-- `tester` (sonnet, medium) — writes/runs tests **from the spec, blind to build logs**.
-- `reviewer` (opus, high) — read-only critical review of the diff.
-- `fixer` (sonnet, high) — root-cause fixes for failing ACs and findings.
-
-### Handoff contract (applies to every spawn)
-
-1. Pass **paths, not content**. The prompt names: run dir, the artifact(s) to
-   read, the single artifact to write, and the task/item IDs in scope.
-2. Every specialist ends its reply with exactly this block, nothing after it:
-
+1. Pass **paths, not content**: run dir, artifacts to read, the one artifact
+   to write, the task/item IDs in scope.
+2. Every specialist ends its reply with exactly:
    ```
    STATUS: DONE | BLOCKED | NEEDS_INPUT
    ARTIFACT: <path written>
    SUMMARY: <one line>
    ISSUES: <none | short list>
    ```
-3. You read the artifact file only when a decision needs it. Keep your own
-   context lean — that is the point of this design.
+3. Read an artifact only when a decision needs it. Your context is the
+   scarcest resource in the run.
 4. Independent spawns go **in one message** so they run in parallel.
-
-## Sizing — pick the lightest tier that fits (P0)
-
-More agents is not better. Coding is tightly coupled work: every extra
-handoff costs a cold start, re-reading, and a chance to lose intent. Size the
-run at intake, record it in `state.json.tier`, and tell the user in one line.
-
-- **Lite** — one module, ≲300 LOC, no external integration. You write a
-  10-line spec yourself (problem, ACs, out of scope) → one `builder` plans and
-  builds → `reviewer` (also runs the tests) → same builder fixes. No analyst,
-  architect, tester or fixer.
-- **Standard** — a small app: a few modules, one external API, a UI. analyst →
-  architect → builders (**sequential by default**; parallel only for truly
-  independent waves) → tester ∥ reviewer → fixer. Default for most vibe work.
-- **Full** — multi-package, several integrations, or brownfield with a large
-  baseline. Everything in this protocol, parallel waves included.
-
-Promote a run one tier up if Gate A reveals more scope; never stay in Full
-"just in case".
-
-## UI projects — the human judges what it looks like
-
-Tests can't tell whether a UI is clean. For any run with a UI:
-- Wave 1 ends with a **clickable skeleton** (layout, real components, fake
-  data). Show the user screenshots at a mini-gate before the remaining waves —
-  this is the cheapest moment to change the UX.
-- `tester` captures Playwright screenshots of the main flows (desktop +
-  mobile width) into `rounds/r<N>/shots/`; Gate B shows them.
-- External APIs (paid, rate-limited) are mocked in tests. One real smoke call
-  is made only with the user's key and only after asking.
 
 ## Run layout
 
 ```
 .pipeline/
-  LESSONS.md                 # cross-run rules, read by every specialist
+  LESSONS.md                 # cross-run rules, read by every role
+  _project/                  # brownfield only: context, baseline, roadmap
   <slug>/
-    state.json               # template: templates/state.json
-    00-brief.md              # user brief, verbatim
-    00-context.md            # scout recon (existing repo only)
-    01-spec.md               # template: templates/spec.md
-    02-plan.md               # template: templates/plan.md
-    03-tasks.md              # template: templates/tasks.md
-    rounds/r<N>/
-      build-T-xx.md          # builder logs (round 1) / fix-log.md (round ≥2)
-      test-report.md         # template: templates/test-report.md
-      review.md              # template: templates/review.md
-      feedback.md            # template: templates/feedback.md
+    state.json  00-brief.md  00-context.md
+    01-spec.md  02-plan.md   03-tasks.md
+    rounds/r<N>/  build-T-xx.md | fix-log.md  test-report.md  review.md
+                  feedback.md   shots/
     99-summary.md
 ```
 
-Templates live next to this file: `.claude/skills/vibe/templates/`.
-Update `state.json` at **every** phase change — a crashed run must be resumable.
+Templates: `.claude/skills/vibe/templates/`. Update `state.json` at every
+phase change so a crashed run is resumable.
 
 ## Phases
 
-### P0 — Intake
-- Slug: kebab-case, ≤4 words, from the brief. Create run dir, write `00-brief.md`
-  verbatim, init `state.json` (`base_sha` = `git rev-parse HEAD` if git repo).
-- Create `.pipeline/LESSONS.md` if missing (empty header).
-- Existing codebase → spawn `scout`: write `00-context.md` (stack, entry points,
-  conventions, exact install/build/lint/typecheck/test commands, test framework
-  or "none").
+### P0 — Intake (you)
+- Slug (kebab-case, ≤4 words), run dir, `00-brief.md` verbatim, `state.json`
+  (`base_sha` = `git rev-parse HEAD`). Create `.pipeline/LESSONS.md` if missing.
+- Existing code → write `00-context.md` yourself: stack, layout, conventions,
+  exact install/build/lint/typecheck/test commands (from manifests/CI, never
+  guessed), test framework. ≤40 lines. Pick the tier.
 
-### P1 — Specify
-- Spawn `analyst` → `01-spec.md`.
-- **Gate A** (skip if `--auto`): show the user a ≤12-line digest — scope in/out,
-  AC count, and each open question with the analyst's default. Use
-  AskUserQuestion for the open questions (max 4, recommended default first).
-  Write answers into the spec's *Decisions* section yourself, then continue.
+### P1 — Specify (you) + Gate A
+- Write `01-spec.md` from the template. Rules:
+  - AC = a behaviour that would **hurt the user if it broke**, checkable by a
+    program. Edge cases live inside tests, not as extra ACs. Respect the cap.
+  - Scope Out is mandatory and specific.
+  - Open questions only when the answer changes the build; max 4, each with
+    your default.
+- **Gate A** (skip with `--auto`): ≤12-line digest + open questions. Record
+  answers under *Decisions*.
 
-### P2 — Plan & tasks
-- Spawn `architect` → `02-plan.md` + `03-tasks.md`.
-- **Traceability check (you do it):** every `AC-xx` in the spec appears in ≥1
-  task's `covers`; every task has `files` and `done_when`; tasks in the same
-  wave have disjoint `files`. Any miss → send back to `architect` once with the
-  exact gaps. Second miss → fix the task file yourself only if trivial, else
-  escalate to the user.
+### P2 — Plan (you)
+- Write `02-plan.md` and `03-tasks.md`. Every AC covered by ≥1 task; every task
+  has `files`, `covers`, `done_when`, size S/M. Same-wave tasks must have
+  disjoint files. Test strategy precise enough for a blind tester.
+- UI project: wave 1 = **clickable skeleton** (real layout and components,
+  fake data). After it, **mini-gate**: show the user screenshots before the
+  remaining waves. Cheapest moment to change UX.
 
-### P3 — Execute (round 1 only)
-- For each wave in order: spawn one `builder` per task, all tasks of the wave in
-  one message. Batch tasks sized `S` that share a module into one builder.
-- After each wave: run the project's fast check (lint/typecheck from context)
-  yourself via Bash. Red → hand the output to `fixer` before the next wave.
-- Git repo → commit after each green wave:
-  `pipeline(<slug>): wave <n> — T-xx, T-yy`. This gives clean rollback points.
-- Builder returns BLOCKED → read its log; if the plan is wrong, send the task
-  back to `architect` for a revision, never let builders improvise architecture.
+### P3 — Build (round 1)
+- One `builder` per task or per batch of small tasks in the same module.
+  Parallel only for disjoint-file tasks in the same wave.
+- After each wave, run lint/typecheck yourself. Red → back to the builder.
+- Commit per green wave: `pipeline(<slug>): wave <n> — T-xx, T-yy`.
+- Builder BLOCKED because the plan is wrong → you revise the plan. Never let a
+  builder improvise architecture.
 
-### P4 + P5 — Test ∥ Review (every round)
-Spawn both **in one message**:
-- `tester`: inputs `01-spec.md`, test strategy in `02-plan.md`, `00-context.md`.
-  Must **not** read `rounds/*/build-*.md` or `fix-log.md`. Writes tests, runs the
-  full suite + lint + typecheck, writes `rounds/r<N>/test-report.md`.
-- `reviewer`: inputs spec, plan, `git diff <base_sha>` (round 1) or the diff of
-  this round's fix commit (round ≥2, plus a regression skim of the whole diff),
-  `.pipeline/LESSONS.md`. Writes `rounds/r<N>/review.md`.
+### P4 ∥ P5 — Test ∥ Review (every round, one message)
+- `tester`: reads spec, plan's *Test strategy* + *Commands*, context. Must not
+  read build/fix logs. Writes tests, runs suite + lint + typecheck, UI
+  screenshots (1280px + 390px) → `rounds/r<N>/test-report.md`.
+- `reviewer`: spec, plan, `LESSONS.md`, diff (`git diff <base_sha>` in round 1;
+  the round's fix commit + regression skim after) → `rounds/r<N>/review.md`.
 
 ### P6 — Feedback (you)
-Write `rounds/r<N>/feedback.md`:
-- **Must-fix** = failing ACs + `blocker`/`major` findings + user feedback items.
-- **Deferred** = `minor`/`nit` (fixed only if the user asks or round budget allows).
-- Track each item's ID across rounds (`FB-<round>-<n>`, keep `origin` = AC/F ID).
-
-Decision:
-1. Must-fix empty → **Gate B**: tell the user what was built, how to run it,
-   AC pass count, deferred list. AskUserQuestion: *Ship* / *Another round with
-   my feedback* / *Fix deferred minors too*. Feedback → new must-fix items →
-   P7.
+Write `rounds/r<N>/feedback.md`: **must-fix** = failing ACs + blocker/major
+findings + user feedback; **deferred** = minor/nit. IDs `FB-<round>-<n>` with
+`origin`.
+1. Must-fix empty → **Gate B**: what was built, how to run, AC pass count,
+   screenshots, deferred list. User: Ship / feedback → next round / fix minors.
 2. Must-fix non-empty and `round < max_rounds` → P7.
-3. **No-progress rule:** an item whose `origin` was must-fix in the previous
-   round too → don't send `fixer` again. Send `architect` with the item and both
-   rounds' evidence for a plan revision, then route the revised tasks to
-   `builder`. Same item stuck a third time → escalate.
-4. `round == max_rounds` and must-fix non-empty → stop, show the user the open
-   items with evidence and your recommendation (more rounds / cut scope / re-plan).
+3. **No-progress rule:** an item must-fix two rounds running → don't resend
+   it. Re-plan it yourself with both rounds' evidence, then send the revised
+   task to a builder. Third time → escalate.
+4. Out of rounds → stop, show open items with evidence and your recommendation.
 
 ### P7 — Fix
-- Group must-fix items by touched files; groups with disjoint files run as
-  parallel `fixer` spawns in one message. Each fixer appends to
-  `rounds/r<N+1>/fix-log.md` under its own heading.
-- Commit: `pipeline(<slug>): round <N+1> fixes — FB-…`. Increment `round`.
-  Go to P4+P5.
+- `builder` in fix mode, grouped by files (disjoint groups in parallel).
+  Appends to `rounds/r<N+1>/fix-log.md`. Commit
+  `pipeline(<slug>): round <N+1> fixes — FB-…`. round++ → P4 ∥ P5.
 
 ### P8 — Close
-- Write `99-summary.md`: what shipped, run command, AC matrix, deferred items,
-  rounds used, items that needed re-plan.
-- **Lesson casting** (the "đúc rule" step): propose 1–3 lessons that generalize
-  beyond this project (a bug class the reviewer kept catching, a convention a
-  builder missed, a spec gap that caused a re-plan). Format each as one
-  imperative rule + one-line why. Ask the user which to keep; append only the
-  approved ones to `.pipeline/LESSONS.md`. Never append unapproved rules.
-- Set `state.json.status = "done"`.
+- `99-summary.md`: what shipped, run command, AC matrix, deferred, rounds,
+  re-plans.
+- **Lesson casting:** propose 1–3 lessons that generalize beyond this project,
+  one imperative rule + one-line why each. Append only the ones the user
+  approves to `.pipeline/LESSONS.md`. `state.json.status = "done"`.
 
-## Conductor rules
-- Talk to the user only at Gate A, Gate B, escalations and close. Between gates,
-  one short progress line per phase is enough.
-- Never mark something passing that a test-report shows failing. Never weaken,
-  skip or delete a test to get green — if a test contradicts the spec, the
-  analyst decides, and the user confirms.
-- A specialist that returns without the STATUS block, or writes outside its
-  allowed paths, gets re-spawned once with the violation stated. Twice → do it
-  differently (smaller scope, other specialist) and note it in `state.json.log`.
-- Cost discipline: scout for any lookup you'd otherwise do with >3 file reads.
-  Don't spawn opus specialists for mechanical work.
+## Brownfield modes
+
+- **`adopt`** (once per repo): write `_project/context.md` (P0 recon + churn
+  hotspots from `git log --stat -50`, TODO count, docs found) and
+  `_project/baseline-spec.md` (what the app does today as `BL-xx`, each
+  `verified`/`assumed`, sourced from code and docs only). `tester` runs the
+  existing suite → `_project/baseline-report.md`. Show health + untested core;
+  recommend a `safety-net` run (tester only: one characterization test per
+  untested core `BL-xx`) before any feature work.
+- **`roadmap <file>`** (needs `adopt`): split into shippable milestones
+  `M1..Mn` in `_project/roadmap.md` (goal, items, deps, risk, size, brief).
+  User approves order, then run each milestone as a normal run, one at a time.
+- **`fix <file|text>`**: skip P1–P3. Write `rounds/r1/feedback.md` directly
+  (one `FB-1-n` per bug, repro if known), then P7 → P4∥P5 → P6. Items that are
+  really features go back to the user for a roadmap run.
+
+Later runs in an adopted repo reuse `_project/context.md`; the reviewer also
+checks the `BL-xx` list for regressions.
+
+## Rules
+- Talk to the user at gates, escalations and close; one progress line per
+  phase otherwise.
+- Never call something passing that a report shows failing. Never weaken,
+  skip or delete a test to go green — a test that contradicts the spec is
+  your call to arbitrate, and the user confirms.
+- Paid or rate-limited external APIs are mocked in tests. A real smoke call
+  uses the user's key and only after asking.
+- A specialist missing the STATUS block or writing outside its paths gets one
+  re-spawn with the violation stated; twice → change approach, log it.

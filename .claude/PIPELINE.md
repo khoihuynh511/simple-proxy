@@ -30,32 +30,31 @@ Hoặc trong session bất kỳ:
 
 Thứ tự khuyến nghị: **adopt → safety-net tests → fix → roadmap**.
 
-## Đội hình
+## Đội hình (v2 — 4 agent)
 
-- **conductor** — Opus · high — điều phối, giữ gate, không tự code
-- **scout** — Haiku · low — trinh sát repo, lấy lệnh build/test
-- **analyst** — Opus · high — brief → spec + acceptance criteria
-- **architect** — Opus · high — plan + task graph theo wave, re-plan khi kẹt
-- **builder** — Sonnet · medium — code từng task, chạy song song trong wave
-- **tester** — Sonnet · medium — test mù theo spec, không đọc log builder
+- **conductor** — Opus · high — trinh sát, viết spec + plan, điều phối, giữ gate, re-plan, đúc rule
+- **builder** — Sonnet · high — code task; chế độ fix: root cause + regression test
+- **tester** — Sonnet · medium — test mù theo spec, chụp màn hình UI, mock API trả phí
 - **reviewer** — Opus · high — review read-only, finding có bằng chứng
-- **fixer** — Sonnet · high — root cause + regression test
 
-Đổi model/effort: sửa `model:` / `effort:` trong `.claude/agents/<tên>.md`.
+Mỗi vai tồn tại vì thêm được thứ vai khác không làm được: **quyết · làm · kiểm hành vi · kiểm chất lượng**.
+
+Tier: **Lite** (conductor → builder → reviewer, ≤6 AC) · **Standard** (đủ 4, ≤15 AC).
+Lớn hơn → cắt milestone bằng `roadmap`, không thêm agent.
 
 ## Vòng lặp
 
 ```
-brief ─▶ analyst ─▶ [Gate A: anh duyệt spec]
-      ─▶ architect ─▶ tasks (wave 1..n)
-      ─▶ builder × N (song song, file tách rời) ─▶ commit mỗi wave
+brief ─▶ conductor: spec ─▶ [Gate A: anh duyệt]
+      ─▶ conductor: plan + tasks
+      ─▶ builder: wave 1 = khung UI bấm được ─▶ [mini-gate: anh xem ảnh chụp]
+      ─▶ builder: các wave còn lại, commit mỗi wave
       ┌▶ tester ∥ reviewer
       │      ▼
-      │  feedback (conductor gom must-fix)
-      │      ├─ sạch ─▶ [Gate B: anh Ship / góp ý / sửa thêm]
-      │      ├─ kẹt 2 round ─▶ architect re-plan
-      └──────┴─ còn lỗi ─▶ fixer × N ─▶ round+1
-                                        ▼ (hết round) ─▶ báo anh quyết
+      │  conductor gom feedback
+      │      ├─ sạch ─▶ [Gate B: Ship / góp ý / sửa thêm]
+      │      ├─ kẹt 2 round ─▶ conductor re-plan
+      └──────┴─ còn lỗi ─▶ builder (fix mode) ─▶ round+1
       close ─▶ đúc rule vào .pipeline/LESSONS.md (anh duyệt)
 ```
 
