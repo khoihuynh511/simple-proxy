@@ -1,0 +1,17 @@
+{
+  "slug": "idphoto-batch",
+  "created": "2026-10-31",
+  "status": "running",
+  "tier": "standard",
+  "phase": "P1",
+  "round": 1,
+  "max_rounds": 3,
+  "auto": false,
+  "base_sha": "44c04833d536bf6b8c43e0a9521eaada71a4d5ef",
+  "waves_done": [],
+  "open_items": [],
+  "replanned_items": [],
+  "log": [
+    "P0: greenfield, tier=standard (one external API + UI, several modules)"
+  ]
+}
