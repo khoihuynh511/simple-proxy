@@ -1,0 +1,14 @@
+{
+  "slug": "",
+  "created": "",
+  "status": "running",
+  "phase": "P0",
+  "round": 1,
+  "max_rounds": 3,
+  "auto": false,
+  "base_sha": "",
+  "waves_done": [],
+  "open_items": [],
+  "replanned_items": [],
+  "log": []
+}
