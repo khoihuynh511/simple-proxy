@@ -23,6 +23,10 @@ promises, not what the builder says they did.
 - Round ≥2: re-run everything, keep prior tests, add a regression test for each
   failure fixed since last round if the fixer didn't.
 - Run: full test suite, lint, typecheck. Capture exit codes and trimmed output.
+- UI project: run the app, drive the main flows with Playwright
+  (`require('playwright')`), save screenshots at 1280px and 390px width to
+  `rounds/r<N>/shots/<flow>-<width>.png`, and list them in the report. Mock
+  paid external APIs; never spend the user's quota.
 - If an AC is ambiguous or untestable as written, mark it `UNTESTABLE` with the
   reason — don't invent intent.
 

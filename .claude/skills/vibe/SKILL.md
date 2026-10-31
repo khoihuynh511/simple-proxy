@@ -87,6 +87,36 @@ Spawn with the Agent tool, `subagent_type` = name below. Each starts cold.
    context lean — that is the point of this design.
 4. Independent spawns go **in one message** so they run in parallel.
 
+## Sizing — pick the lightest tier that fits (P0)
+
+More agents is not better. Coding is tightly coupled work: every extra
+handoff costs a cold start, re-reading, and a chance to lose intent. Size the
+run at intake, record it in `state.json.tier`, and tell the user in one line.
+
+- **Lite** — one module, ≲300 LOC, no external integration. You write a
+  10-line spec yourself (problem, ACs, out of scope) → one `builder` plans and
+  builds → `reviewer` (also runs the tests) → same builder fixes. No analyst,
+  architect, tester or fixer.
+- **Standard** — a small app: a few modules, one external API, a UI. analyst →
+  architect → builders (**sequential by default**; parallel only for truly
+  independent waves) → tester ∥ reviewer → fixer. Default for most vibe work.
+- **Full** — multi-package, several integrations, or brownfield with a large
+  baseline. Everything in this protocol, parallel waves included.
+
+Promote a run one tier up if Gate A reveals more scope; never stay in Full
+"just in case".
+
+## UI projects — the human judges what it looks like
+
+Tests can't tell whether a UI is clean. For any run with a UI:
+- Wave 1 ends with a **clickable skeleton** (layout, real components, fake
+  data). Show the user screenshots at a mini-gate before the remaining waves —
+  this is the cheapest moment to change the UX.
+- `tester` captures Playwright screenshots of the main flows (desktop +
+  mobile width) into `rounds/r<N>/shots/`; Gate B shows them.
+- External APIs (paid, rate-limited) are mocked in tests. One real smoke call
+  is made only with the user's key and only after asking.
+
 ## Run layout
 
 ```

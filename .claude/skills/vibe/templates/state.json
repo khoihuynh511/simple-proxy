@@ -2,6 +2,7 @@
   "slug": "",
   "created": "",
   "status": "running",
+  "tier": "standard",
   "phase": "P0",
   "round": 1,
   "max_rounds": 3,
